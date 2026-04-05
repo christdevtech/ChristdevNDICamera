@@ -1,0 +1,7 @@
+# ninja log v5
+1	691	7970075785487095	CMakeFiles/ndi_wrapper.dir/ndi_wrapper.cpp.o	3fc475bc7a8fb29f
+703	788	7970075786469358	C:/Users/MICHAEL/Documents/GitHub/cfm-apps/android-ndi-camera/app/build/intermediates/cxx/Debug/66g4x1a4/obj/arm64-v8a/libndi_wrapper.so	8840208f53775895
+5	1121	7970081703640577	CMakeFiles/ndi_wrapper.dir/ndi_wrapper.cpp.o	3fc475bc7a8fb29f
+1122	1229	7970081704758027	C:/Users/MICHAEL/Documents/GitHub/cfm-apps/android-ndi-camera/app/build/intermediates/cxx/Debug/66g4x1a4/obj/arm64-v8a/libndi_wrapper.so	8840208f53775895
+9	1137	7970113678702097	CMakeFiles/ndi_wrapper.dir/ndi_wrapper.cpp.o	3fc475bc7a8fb29f
+1138	1269	7970113680013477	C:/Users/MICHAEL/Documents/GitHub/cfm-apps/android-ndi-camera/app/build/intermediates/cxx/Debug/66g4x1a4/obj/arm64-v8a/libndi_wrapper.so	8840208f53775895

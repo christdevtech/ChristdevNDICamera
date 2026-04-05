@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Christdev NDI Camera</string>
+    <string name="btn_start_stream">Start Stream</string>
+    <string name="btn_stop_stream">Stop Stream</string>
+    <string name="status_ready">Ready</string>
+    <string name="status_streaming">Streaming</string>
+</resources>

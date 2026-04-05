@@ -1,0 +1,40 @@
+{
+  "buildFiles": [
+    "C:\\Users\\MICHAEL\\Documents\\GitHub\\cfm-apps\\android-ndi-camera\\app\\src\\main\\cpp\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "C:\\Users\\MICHAEL\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+      "-C",
+      "C:\\Users\\MICHAEL\\Documents\\GitHub\\cfm-apps\\android-ndi-camera\\app\\.cxx\\Debug\\66g4x1a4\\x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "C:\\Users\\MICHAEL\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-C",
+    "C:\\Users\\MICHAEL\\Documents\\GitHub\\cfm-apps\\android-ndi-camera\\app\\.cxx\\Debug\\66g4x1a4\\x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "ndi_wrapper::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "x86_64",
+      "artifactName": "ndi_wrapper",
+      "output": "C:\\Users\\MICHAEL\\Documents\\GitHub\\cfm-apps\\android-ndi-camera\\app\\build\\intermediates\\cxx\\Debug\\66g4x1a4\\obj\\x86_64\\libndi_wrapper.so",
+      "runtimeFiles": [
+        "C:\\Users\\MICHAEL\\Documents\\GitHub\\cfm-apps\\android-ndi-camera\\app\\src\\main\\jniLibs\\x86_64\\libndi.so"
+      ]
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "C:\\Users\\MICHAEL\\AppData\\Local\\Android\\Sdk\\ndk\\27.0.12077973\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe",
+      "cppCompilerExecutable": "C:\\Users\\MICHAEL\\AppData\\Local\\Android\\Sdk\\ndk\\27.0.12077973\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang++.exe"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

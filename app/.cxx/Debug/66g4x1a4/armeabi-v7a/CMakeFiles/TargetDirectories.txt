@@ -1,0 +1,3 @@
+C:/Users/MICHAEL/Documents/GitHub/cfm-apps/android-ndi-camera/app/.cxx/Debug/66g4x1a4/armeabi-v7a/CMakeFiles/ndi_wrapper.dir
+C:/Users/MICHAEL/Documents/GitHub/cfm-apps/android-ndi-camera/app/.cxx/Debug/66g4x1a4/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/MICHAEL/Documents/GitHub/cfm-apps/android-ndi-camera/app/.cxx/Debug/66g4x1a4/armeabi-v7a/CMakeFiles/rebuild_cache.dir

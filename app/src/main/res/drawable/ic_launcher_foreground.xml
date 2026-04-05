@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Tri-circle of colors -->
+    <path
+        android:fillColor="#FF4B42"
+        android:pathData="M54,16 A24,24 0 1,1 53.99,16 Z" /> <!-- Top Red -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M30,58 A24,24 0 1,1 29.99,58 Z" /> <!-- Bottom Left Green -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M78,58 A24,24 0 1,1 77.99,58 Z" /> <!-- Bottom Right Blue -->
+
+    <!-- White center intersection -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,42 A12,12 0 1,1 53.99,42 Z" />
+
+    <!-- Camera Icon -->
+    <path
+        android:fillColor="#333333"
+        android:pathData="M36,38 L42,32 L66,32 L72,38 L82,38 C84.2,38 86,39.8 86,42 L86,74 C86,76.2 84.2,78 82,78 L26,78 C23.8,78 22,76.2 22,74 L22,42 C22,39.8 23.8,38 26,38 L36,38 Z M54,70 C61.73,70 68,63.73 68,56 C68,48.27 61.73,42 54,42 C46.27,42 40,48.27 40,56 C40,63.73 46.27,70 54,70 Z M54,48 C58.42,48 62,51.58 62,56 C62,60.42 58.42,64 54,64 C49.58,64 46,60.42 46,56 C46,51.58 49.58,48 54,48 Z" />
+</vector>

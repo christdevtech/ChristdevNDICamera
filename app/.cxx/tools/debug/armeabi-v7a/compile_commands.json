@@ -1,0 +1,7 @@
+[
+{
+  "directory": "C:/Users/MICHAEL/Documents/GitHub/cfm-apps/android-ndi-camera/app/.cxx/Debug/66g4x1a4/armeabi-v7a",
+  "command": "C:\\Users\\MICHAEL\\AppData\\Local\\Android\\Sdk\\ndk\\27.0.12077973\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang++.exe --target=armv7-none-linux-androideabi26 --sysroot=C:/Users/MICHAEL/AppData/Local/Android/Sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/windows-x86_64/sysroot -Dndi_wrapper_EXPORTS -IC:/Users/MICHAEL/Documents/GitHub/cfm-apps/android-ndi-camera/app/src/main/cpp/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security  -std=c++17 -fno-limit-debug-info  -fPIC -o CMakeFiles\\ndi_wrapper.dir\\ndi_wrapper.cpp.o -c C:\\Users\\MICHAEL\\Documents\\GitHub\\cfm-apps\\android-ndi-camera\\app\\src\\main\\cpp\\ndi_wrapper.cpp",
+  "file": "C:\\Users\\MICHAEL\\Documents\\GitHub\\cfm-apps\\android-ndi-camera\\app\\src\\main\\cpp\\ndi_wrapper.cpp"
+}
+]
