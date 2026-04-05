@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Christdev NDI Camera</string>
-    <string name="btn_start_stream">Start Stream</string>
-    <string name="btn_stop_stream">Stop Stream</string>
-    <string name="status_ready">Ready</string>
-    <string name="status_streaming">Streaming</string>
+    <string name="app_name">AndroidNDICamera</string>
+    <string name="brightness_exposure">Brightness (Exposure)</string>
+    <string name="quick_settings">Quick Settings</string>
+    <string name="exposure_bias">Exposure Bias</string>
+    <string name="manual">Manual</string>
+    <string name="iso">ISO</string>
+    <string name="shutter">Shutter</string>
 </resources>

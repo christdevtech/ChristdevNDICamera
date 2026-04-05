@@ -31,7 +31,11 @@ class MainActivity : AppCompatActivity() {
 
     private var selectedCameraId: String? = null
     private var selectedSize: Size? = null
+    
+    // Camera Control Ranges
     private var exposureRange: android.util.Range<Int>? = null
+    private var isoRange: android.util.Range<Int>? = null
+    private var shutterRange: android.util.Range<Long>? = null
 
     private val requiredPermissions = arrayOf(
         Manifest.permission.CAMERA,
@@ -147,16 +151,7 @@ class MainActivity : AppCompatActivity() {
         val allResolutions = ndiCameraManager.getCameraResolutions(cameraId)
         if (allResolutions.isEmpty()) return
 
-        // Setup Exposure Slider for this camera
-        exposureRange = ndiCameraManager.getExposureRange(cameraId)
-        exposureRange?.let { range ->
-            // Android SeekBar is 0-indexed, so we map [-min, max] to [0, max-min]
-            binding.seekExposure.max = range.upper - range.lower
-            binding.seekExposure.progress = 0 - range.lower // default to 0 EV
-            binding.seekExposure.isEnabled = true
-        } ?: run {
-            binding.seekExposure.isEnabled = false
-        }
+        setupCameraControls(cameraId)
 
         // Define standard broadcast formats to simplify the UI
         val standardFormats = mapOf(
@@ -204,6 +199,56 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupCameraControls(cameraId: String) {
+        // Auto Exposure Control
+        exposureRange = ndiCameraManager.getExposureRange(cameraId)
+        exposureRange?.let { range ->
+            val max = range.upper - range.lower
+            val progress = 0 - range.lower
+            
+            binding.seekExposure.max = max
+            binding.seekExposure.progress = progress
+            binding.seekExposure.isEnabled = true
+            
+            binding.seekQuickExposure.max = max
+            binding.seekQuickExposure.progress = progress
+            binding.seekQuickExposure.isEnabled = true
+        } ?: run { 
+            binding.seekExposure.isEnabled = false 
+            binding.seekQuickExposure.isEnabled = false
+        }
+
+        // ISO Control
+        isoRange = ndiCameraManager.getIsoRange(cameraId)
+        isoRange?.let { range ->
+            val max = range.upper - range.lower
+            val progress = range.lower
+            
+            binding.seekIso.max = max
+            binding.seekIso.progress = progress
+            binding.tvIsoLabel.text = "ISO: ${range.lower}"
+            
+            binding.seekQuickIso.max = max
+            binding.seekQuickIso.progress = progress
+            binding.tvQuickIsoLabel.text = "ISO: ${range.lower}"
+        }
+
+        // Shutter Speed Control
+        shutterRange = ndiCameraManager.getShutterSpeedRange(cameraId)
+        shutterRange?.let { range ->
+            binding.seekShutter.max = 100
+            binding.seekShutter.progress = 0
+            val initialMs = range.lower / 1000000.0
+            val text = "Shutter: ${String.format(java.util.Locale.US, "%.1f", initialMs)} ms"
+            
+            binding.tvShutterLabel.text = text
+            
+            binding.seekQuickShutter.max = 100
+            binding.seekQuickShutter.progress = 0
+            binding.tvQuickShutterLabel.text = text
+        }
+    }
+
     private fun startInitialPreview() {
         if (selectedCameraId != null && selectedSize != null) {
             restartPreview()
@@ -242,69 +287,177 @@ class MainActivity : AppCompatActivity() {
 
         val display = getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
         val rotation = display.defaultDisplay.rotation
-        val isPortrait = rotation == android.view.Surface.ROTATION_0 || rotation == android.view.Surface.ROTATION_180
-
-        val effectiveWidth = if (isPortrait) videoHeight else videoWidth
-        val effectiveHeight = if (isPortrait) videoWidth else videoHeight
-
-        val aspectRatio = effectiveWidth.toFloat() / effectiveHeight.toFloat()
-        val layoutParams = binding.cameraTextureView.layoutParams
         
-        if (viewWidth > viewHeight * aspectRatio) {
-            layoutParams.width = (viewHeight * aspectRatio).toInt()
-            layoutParams.height = viewHeight
-        } else {
-            layoutParams.width = viewWidth
-            layoutParams.height = (viewWidth / aspectRatio).toInt()
-        }
-        binding.cameraTextureView.layoutParams = layoutParams
-
-        // Fix the local preview orientation
-        applyPreviewTransform(layoutParams.width, layoutParams.height, isPortrait)
-    }
-
-    private fun applyPreviewTransform(viewWidth: Int, viewHeight: Int, isPortrait: Boolean) {
         val matrix = android.graphics.Matrix()
         val viewRect = android.graphics.RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
+        val bufferRect = android.graphics.RectF(0f, 0f, videoHeight.toFloat(), videoWidth.toFloat())
         val centerX = viewRect.centerX()
         val centerY = viewRect.centerY()
 
-        if (isPortrait) {
-            // Camera sensor is 90 degrees offset from portrait display
-            val cameraManager = getSystemService(CAMERA_SERVICE) as android.hardware.camera2.CameraManager
-            val cameraId = selectedCameraId ?: return
-            val chars = cameraManager.getCameraCharacteristics(cameraId)
-            val sensorOrientation = chars.get(android.hardware.camera2.CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
+        bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY())
+        matrix.setRectToRect(viewRect, bufferRect, android.graphics.Matrix.ScaleToFit.CENTER)
 
-            // Rotate visually
-            matrix.postRotate(sensorOrientation.toFloat(), centerX, centerY)
-            
-            // Re-scale after rotation
-            val scaleX = viewHeight.toFloat() / viewWidth.toFloat()
-            val scaleY = viewWidth.toFloat() / viewHeight.toFloat()
-            matrix.postScale(scaleX, scaleY, centerX, centerY)
+        if (android.view.Surface.ROTATION_90 == rotation || android.view.Surface.ROTATION_270 == rotation) {
+            val scale = Math.min(
+                viewHeight.toFloat() / videoHeight,
+                viewWidth.toFloat() / videoWidth
+            )
+            matrix.postScale(scale, scale, centerX, centerY)
+            matrix.postRotate((90 * (rotation - 2)).toFloat(), centerX, centerY)
+        } else {
+            val scale = Math.min(
+                viewHeight.toFloat() / videoWidth,
+                viewWidth.toFloat() / videoHeight
+            )
+            matrix.postScale(scale, scale, centerX, centerY)
+            matrix.postRotate(90f, centerX, centerY)
         }
-        
         binding.cameraTextureView.setTransform(matrix)
+        
+        val lp = binding.cameraTextureView.layoutParams
+        lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        lp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        binding.cameraTextureView.layoutParams = lp
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!isStreaming) {
+            startInitialPreview()
+        }
+    }
+
+    private fun syncManualModeUI(isChecked: Boolean) {
+        binding.layoutAutoControls.visibility = if (isChecked) View.GONE else View.VISIBLE
+        binding.layoutManualControls.visibility = if (isChecked) View.VISIBLE else View.GONE
+        
+        binding.seekQuickExposure.visibility = if (isChecked) View.GONE else View.VISIBLE
+        binding.layoutQuickManualControls.visibility = if (isChecked) View.VISIBLE else View.GONE
+        
+        binding.switchManualMode.isChecked = isChecked
+        binding.switchQuickManualMode.isChecked = isChecked
+        
+        if (isChecked) {
+            val currentIso = ndiCameraManager.lastAutoIso
+            val currentShutter = ndiCameraManager.lastAutoShutter
+            
+            isoRange?.let { range ->
+                val clampedIso = currentIso.coerceIn(range.lower, range.upper)
+                val progress = clampedIso - range.lower
+                binding.seekIso.progress = progress
+                binding.seekQuickIso.progress = progress
+                val text = "ISO: $clampedIso"
+                binding.tvIsoLabel.text = text
+                binding.tvQuickIsoLabel.text = text
+                ndiCameraManager.setIso(clampedIso)
+            }
+            
+            shutterRange?.let { range ->
+                val clampedShutter = currentShutter.coerceIn(range.lower, range.upper)
+                val fraction = (clampedShutter - range.lower).toDouble() / (range.upper - range.lower).toDouble()
+                val progress = (fraction * 100).toInt()
+                binding.seekShutter.progress = progress
+                binding.seekQuickShutter.progress = progress
+                val ms = clampedShutter / 1000000.0
+                val text = "Shutter: ${String.format(java.util.Locale.US, "%.1f", ms)} ms"
+                binding.tvShutterLabel.text = text
+                binding.tvQuickShutterLabel.text = text
+                ndiCameraManager.setShutterSpeed(clampedShutter)
+            }
+        }
+        ndiCameraManager.setManualMode(isChecked)
+    }
+
+    private fun handleExposureChange(progress: Int) {
+        exposureRange?.let { range ->
+            val ev = progress + range.lower
+            ndiCameraManager.setExposure(ev)
+            binding.seekExposure.progress = progress
+            binding.seekQuickExposure.progress = progress
+        }
+    }
+    
+    private fun handleIsoChange(progress: Int) {
+        isoRange?.let { range ->
+            val iso = progress + range.lower
+            val text = "ISO: $iso"
+            binding.tvIsoLabel.text = text
+            binding.tvQuickIsoLabel.text = text
+            binding.seekIso.progress = progress
+            binding.seekQuickIso.progress = progress
+            ndiCameraManager.setIso(iso)
+        }
+    }
+    
+    private fun handleShutterChange(progress: Int) {
+        shutterRange?.let { range ->
+            val fraction = progress / 100.0
+            val shutterSpeed = range.lower + (fraction * (range.upper - range.lower)).toLong()
+            val ms = shutterSpeed / 1000000.0
+            val text = "Shutter: ${String.format(java.util.Locale.US, "%.1f", ms)} ms"
+            binding.tvShutterLabel.text = text
+            binding.tvQuickShutterLabel.text = text
+            binding.seekShutter.progress = progress
+            binding.seekQuickShutter.progress = progress
+            ndiCameraManager.setShutterSpeed(shutterSpeed)
+        }
     }
 
     private fun setupListeners() {
         binding.btnSettings.setOnClickListener {
             binding.settingsSheet.visibility = View.VISIBLE
+            binding.quickControlsOverlay.visibility = View.GONE
         }
 
-        binding.seekExposure.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+        binding.btnQuickSettings.setOnClickListener {
+            if (binding.quickControlsOverlay.visibility == View.VISIBLE) {
+                binding.quickControlsOverlay.visibility = View.GONE
+            } else {
+                binding.quickControlsOverlay.visibility = View.VISIBLE
+            }
+        }
+
+        binding.switchManualMode.setOnCheckedChangeListener { _, isChecked ->
+            if (binding.switchQuickManualMode.isChecked != isChecked) {
+                syncManualModeUI(isChecked)
+            }
+        }
+        
+        binding.switchQuickManualMode.setOnCheckedChangeListener { _, isChecked ->
+            if (binding.switchManualMode.isChecked != isChecked) {
+                syncManualModeUI(isChecked)
+            }
+        }
+
+        val exposureListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    exposureRange?.let { range ->
-                        val ev = progress + range.lower
-                        ndiCameraManager.setExposure(ev)
-                    }
-                }
+                if (fromUser) handleExposureChange(progress)
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
-        })
+        }
+        binding.seekExposure.setOnSeekBarChangeListener(exposureListener)
+        binding.seekQuickExposure.setOnSeekBarChangeListener(exposureListener)
+
+        val isoListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) handleIsoChange(progress)
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        }
+        binding.seekIso.setOnSeekBarChangeListener(isoListener)
+        binding.seekQuickIso.setOnSeekBarChangeListener(isoListener)
+
+        val shutterListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) handleShutterChange(progress)
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        }
+        binding.seekShutter.setOnSeekBarChangeListener(shutterListener)
+        binding.seekQuickShutter.setOnSeekBarChangeListener(shutterListener)
 
         binding.btnApplySettings.setOnClickListener {
             binding.settingsSheet.visibility = View.GONE
@@ -325,6 +478,10 @@ class MainActivity : AppCompatActivity() {
         
         // Lock orientation BEFORE starting stream
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        
+        // Force cleanup before starting to prevent port clashes
+        ndiCameraManager.destroyNdi()
+        Thread.sleep(100)
         
         if (ndiCameraManager.initializeNdi(ndiName)) {
             isStreaming = true

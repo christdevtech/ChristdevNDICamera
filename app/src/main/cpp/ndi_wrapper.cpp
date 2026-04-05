@@ -10,15 +10,25 @@
 
 static NDIlib_send_instance_t pNDI_send = nullptr;
 static std::vector<uint8_t> frame_buffer;
+static bool is_ndi_initialized = false;
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_cfmapps_networkcamera_NdiCameraManager_initializeNdi(
         JNIEnv* env,
         jobject /* this */,
         jstring ndiName) {
-    if (!NDIlib_initialize()) {
-        LOGE("Cannot run NDI.");
-        return JNI_FALSE;
+
+    if (!is_ndi_initialized) {
+        if (!NDIlib_initialize()) {
+            LOGE("Cannot run NDI.");
+            return JNI_FALSE;
+        }
+        is_ndi_initialized = true;
+    }
+
+    if (pNDI_send) {
+        NDIlib_send_destroy(pNDI_send);
+        pNDI_send = nullptr;
     }
 
     const char* name = env->GetStringUTFChars(ndiName, nullptr);

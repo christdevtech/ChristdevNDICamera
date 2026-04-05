@@ -45,6 +45,16 @@
             android:textColor="#FFFFFF"
             android:textStyle="bold" />
 
+        <ImageButton
+            android:id="@+id/btnQuickSettings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_camera"
+            app:tint="#FFFFFF"
+            android:contentDescription="@string/quick_settings" />
+
         <Button
             android:id="@+id/btnSettings"
             style="?attr/materialButtonOutlinedStyle"
@@ -60,6 +70,77 @@
             android:layout_height="wrap_content"
             android:text="GO LIVE" />
 
+    </LinearLayout>
+
+    <!-- Quick Controls Overlay (Semi-transparent floating menu) -->
+    <LinearLayout
+        android:id="@+id/quickControlsOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="#B3000000"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/bottomBar"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/exposure_bias"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+
+        <SeekBar
+            android:id="@+id/seekQuickExposure"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp" />
+
+        <Switch
+            android:id="@+id/switchQuickManualMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/manual"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:id="@+id/layoutQuickManualControls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvQuickIsoLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/iso"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+
+            <SeekBar
+                android:id="@+id/seekQuickIso"
+                android:layout_width="200dp"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tvQuickShutterLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/shutter"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+
+            <SeekBar
+                android:id="@+id/seekQuickShutter"
+                android:layout_width="200dp"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- Settings Sheet (Full Screen Overlay) -->
@@ -125,18 +206,81 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp" />
 
+            <!-- CAMERA CONTROLS -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="Brightness (Exposure)"
-                android:textColor="#666666" />
+                android:layout_marginTop="24dp"
+                android:text="Camera Controls"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#333333" />
 
-            <SeekBar
-                android:id="@+id/seekExposure"
+            <Switch
+                android:id="@+id/switchManualMode"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="16dp"
+                android:text="Manual Exposure Mode"
+                android:textColor="#666666" />
+
+            <!-- Auto Mode Controls -->
+            <LinearLayout
+                android:id="@+id/layoutAutoControls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/brightness_exposure"
+                    android:textColor="#666666" />
+
+                <SeekBar
+                    android:id="@+id/seekExposure"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+
+            <!-- Manual Mode Controls -->
+            <LinearLayout
+                android:id="@+id/layoutManualControls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tvIsoLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="ISO (Sensitivity)"
+                    android:textColor="#666666" />
+
+                <SeekBar
+                    android:id="@+id/seekIso"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" />
+
+                <TextView
+                    android:id="@+id/tvShutterLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Shutter Speed"
+                    android:textColor="#666666" />
+
+                <SeekBar
+                    android:id="@+id/seekShutter"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
 
             <Button
                 android:id="@+id/btnApplySettings"
