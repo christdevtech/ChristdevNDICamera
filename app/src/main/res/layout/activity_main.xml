@@ -185,50 +185,49 @@
                 android:textStyle="bold"
                 android:layout_marginBottom="32dp" />
 
-            <!-- NDI Name -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Stream Name"
-                android:textColor="#BBBBBB" />
-            <EditText
-                android:id="@+id/etSetupName"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                android:hint="e.g. Android Camera"
-                android:textColorHint="#999999"
-                android:textColor="#FFFFFF"
-                android:text="Android NDI Cam"
-                android:backgroundTint="#FFFFFF" />
+                android:hint="Stream Name">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etSetupName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Android NDI Cam" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Camera -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Camera Lens"
-                android:textColor="#BBBBBB" />
-            <Spinner
-                android:id="@+id/spinnerSetupCamera"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                android:backgroundTint="#FFFFFF"
-                android:theme="@style/Theme.AppCompat.Light" />
+                android:hint="Camera Lens">
+
+                <AutoCompleteTextView
+                    android:id="@+id/spinnerSetupCamera"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Resolution -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Resolution"
-                android:textColor="#BBBBBB" />
-            <Spinner
-                android:id="@+id/spinnerSetupResolution"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                android:backgroundTint="#FFFFFF"
-                android:theme="@style/Theme.AppCompat.Light" />
+                android:hint="Resolution">
+
+                <AutoCompleteTextView
+                    android:id="@+id/spinnerSetupResolution"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Framerate & Orientation Row -->
             <LinearLayout
@@ -243,17 +242,18 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:layout_marginEnd="8dp">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Frame Rate"
-                        android:textColor="#BBBBBB" />
-                    <Spinner
-                        android:id="@+id/spinnerSetupFps"
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:backgroundTint="#FFFFFF"
-                        android:theme="@style/Theme.AppCompat.Light" />
+                        android:layout_height="wrap_content"
+                        android:hint="Frame Rate">
+
+                        <AutoCompleteTextView
+                            android:id="@+id/spinnerSetupFps"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="none" />
+                    </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
 
                 <LinearLayout
@@ -262,17 +262,18 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:layout_marginStart="8dp">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Orientation"
-                        android:textColor="#BBBBBB" />
-                    <Spinner
-                        android:id="@+id/spinnerSetupOrientation"
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:backgroundTint="#FFFFFF"
-                        android:theme="@style/Theme.AppCompat.Light" />
+                        android:layout_height="wrap_content"
+                        android:hint="Orientation">
+
+                        <AutoCompleteTextView
+                            android:id="@+id/spinnerSetupOrientation"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="none" />
+                    </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
             </LinearLayout>
 
@@ -296,13 +297,19 @@
                 android:layout_marginBottom="8dp"
                 android:checked="true" />
 
-            <Spinner
-                android:id="@+id/spinnerSetupMicSource"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
                 android:layout_marginBottom="32dp"
-                android:backgroundTint="#FFFFFF"
-                android:theme="@style/Theme.AppCompat.Light" />
+                android:hint="Audio Input">
+
+                <AutoCompleteTextView
+                    android:id="@+id/spinnerSetupMicSource"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Start Button -->
             <Button

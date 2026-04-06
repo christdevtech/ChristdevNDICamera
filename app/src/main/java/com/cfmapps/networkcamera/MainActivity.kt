@@ -138,6 +138,10 @@ class MainActivity : AppCompatActivity() {
         binding.setupContainer.visibility = View.VISIBLE
         binding.liveContainer.visibility = View.GONE
         
+        val sharedPrefs = getSharedPreferences("NDI_CAMERA_PREFS", Context.MODE_PRIVATE)
+        val savedName = sharedPrefs.getString("NDI_STREAM_NAME", "Android NDI Cam")
+        binding.etSetupName.setText(savedName)
+        
         val cameraIds = ndiCameraManager.getCameraIds()
         if (cameraIds.isEmpty()) {
             Toast.makeText(this, "No cameras found", Toast.LENGTH_LONG).show()
@@ -155,39 +159,35 @@ class MainActivity : AppCompatActivity() {
 
         // 2. FPS List
         val fpsOptions = listOf(30, 60, 24, 25, 50)
-        val fpsAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, fpsOptions.map { "$it fps" })
-        fpsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinnerSetupFps.adapter = fpsAdapter
-        binding.spinnerSetupFps.setSelection(0)
+        val fpsAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, fpsOptions.map { "$it fps" })
+        binding.spinnerSetupFps.setAdapter(fpsAdapter)
+        binding.spinnerSetupFps.setText(fpsAdapter.getItem(0), false)
 
         // 3. Orientation List
         val orientationOptions = listOf("Landscape", "Portrait")
-        val oriAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, orientationOptions)
-        oriAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinnerSetupOrientation.adapter = oriAdapter
-        binding.spinnerSetupOrientation.setSelection(0)
+        val oriAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, orientationOptions)
+        binding.spinnerSetupOrientation.setAdapter(oriAdapter)
+        binding.spinnerSetupOrientation.setText(oriAdapter.getItem(0), false)
 
         // 4. Audio Devices
         setupAudioDevices()
     }
 
     private fun setupCameraSpinner(cameraIds: List<String>) {
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, cameraIds)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinnerSetupCamera.adapter = adapter
+        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, cameraIds)
+        binding.spinnerSetupCamera.setAdapter(adapter)
         
         val initialIndex = cameraIds.indexOf(selectedCameraId)
-        if (initialIndex >= 0) binding.spinnerSetupCamera.setSelection(initialIndex)
+        if (initialIndex >= 0) {
+            binding.spinnerSetupCamera.setText(adapter.getItem(initialIndex), false)
+        }
 
-        binding.spinnerSetupCamera.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val newId = cameraIds[position]
-                if (newId != selectedCameraId) {
-                    selectedCameraId = newId
-                    updateResolutionOptions(newId)
-                }
+        binding.spinnerSetupCamera.setOnItemClickListener { _, _, position, _ ->
+            val newId = cameraIds[position]
+            if (newId != selectedCameraId) {
+                selectedCameraId = newId
+                updateResolutionOptions(newId)
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
         
         selectedCameraId?.let { updateResolutionOptions(it) }
@@ -221,9 +221,8 @@ class MainActivity : AppCompatActivity() {
             if (name != null) "$name (${size.width}x${size.height})" else "${size.width}x${size.height}"
         }
 
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, resStrings)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinnerSetupResolution.adapter = adapter
+        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, resStrings)
+        binding.spinnerSetupResolution.setAdapter(adapter)
 
         // Set default to 1080p as requested, or fallback to best
         val defaultSize = displayResolutions.find { it.width == 1920 && it.height == 1080 } 
@@ -231,13 +230,13 @@ class MainActivity : AppCompatActivity() {
                         ?: displayResolutions[0]
         
         selectedSize = defaultSize
-        binding.spinnerSetupResolution.setSelection(displayResolutions.indexOf(defaultSize))
+        val defaultIndex = displayResolutions.indexOf(defaultSize)
+        if (defaultIndex >= 0) {
+            binding.spinnerSetupResolution.setText(adapter.getItem(defaultIndex), false)
+        }
 
-        binding.spinnerSetupResolution.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                selectedSize = displayResolutions[position]
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        binding.spinnerSetupResolution.setOnItemClickListener { _, _, position, _ ->
+            selectedSize = displayResolutions[position]
         }
     }
 
@@ -248,12 +247,13 @@ class MainActivity : AppCompatActivity() {
             
             if (devices.isNotEmpty()) {
                 val deviceNames = devices.map { it.productName.toString() }
-                val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, deviceNames)
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                binding.spinnerSetupMicSource.adapter = adapter
+                val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, deviceNames)
+                binding.spinnerSetupMicSource.setAdapter(adapter)
+                binding.spinnerSetupMicSource.setText(adapter.getItem(0), false)
             } else {
-                val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf("No Microphone Detected"))
-                binding.spinnerSetupMicSource.adapter = adapter
+                val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, listOf("No Microphone Detected"))
+                binding.spinnerSetupMicSource.setAdapter(adapter)
+                binding.spinnerSetupMicSource.setText(adapter.getItem(0), false)
                 binding.switchSetupMic.isChecked = false
             }
         } else {
@@ -268,10 +268,13 @@ class MainActivity : AppCompatActivity() {
     
     private fun startLiveBroadcast() {
         val ndiName = binding.etSetupName.text.toString()
-        val fpsString = binding.spinnerSetupFps.selectedItem.toString()
+        val sharedPrefs = getSharedPreferences("NDI_CAMERA_PREFS", Context.MODE_PRIVATE)
+        sharedPrefs.edit().putString("NDI_STREAM_NAME", ndiName).apply()
+
+        val fpsString = binding.spinnerSetupFps.text.toString()
         val fps = fpsString.replace(" fps", "").toIntOrNull() ?: 30
         
-        isPortraitLock = binding.spinnerSetupOrientation.selectedItem.toString() == "Portrait"
+        isPortraitLock = binding.spinnerSetupOrientation.text.toString() == "Portrait"
         
         // Lock OS Orientation to requested setup (Allows upside down rotations)
         requestedOrientation = if (isPortraitLock) {
