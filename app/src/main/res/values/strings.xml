@@ -1,10 +1,1 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">AndroidNDICamera</string>
-    <string name="brightness_exposure">Brightness (Exposure)</string>
-    <string name="quick_settings">Quick Settings</string>
-    <string name="exposure_bias">Exposure Bias</string>
-    <string name="manual">Manual</string>
-    <string name="iso">ISO</string>
-    <string name="shutter">Shutter</string>
-</resources>
+<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">AndroidNDICamera</string><string name="exposure_bias">Exposure Bias</string><string name="manual">Manual Exposure</string><string name="iso">ISO: %1$d</string><string name="shutter">Shutter: %1$s ms</string><string name="live_status">LIVE • %1$s</string></resources>

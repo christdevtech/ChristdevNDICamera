@@ -296,7 +296,7 @@ class MainActivity : AppCompatActivity() {
             
             // Tally
             binding.tallyBorder.visibility = View.VISIBLE
-            binding.tvLiveStatus.text = "LIVE • $ndiName"
+            binding.tvLiveStatus.text = getString(R.string.live_status, ndiName)
             
             // Start Camera
             startLocalPreview()
@@ -436,7 +436,7 @@ class MainActivity : AppCompatActivity() {
             
             binding.seekLiveIso.max = max
             binding.seekLiveIso.progress = progress
-            binding.tvLiveIsoLabel.text = "ISO: ${range.lower}"
+            binding.tvLiveIsoLabel.text = getString(R.string.iso, range.lower)
         }
 
         // Shutter Speed Control
@@ -445,8 +445,7 @@ class MainActivity : AppCompatActivity() {
             binding.seekLiveShutter.max = 100
             binding.seekLiveShutter.progress = 0
             val initialMs = range.lower / 1000000.0
-            val text = "Shutter: ${String.format(Locale.US, "%.1f", initialMs)} ms"
-            binding.tvLiveShutterLabel.text = text
+            binding.tvLiveShutterLabel.text = getString(R.string.shutter, String.format(Locale.US, "%.1f", initialMs))
         }
     }
 
@@ -462,7 +461,7 @@ class MainActivity : AppCompatActivity() {
                 val clampedIso = currentIso.coerceIn(range.lower, range.upper)
                 val progress = clampedIso - range.lower
                 binding.seekLiveIso.progress = progress
-                binding.tvLiveIsoLabel.text = "ISO: $clampedIso"
+                binding.tvLiveIsoLabel.text = getString(R.string.iso, clampedIso)
                 ndiCameraManager.setIso(clampedIso)
             }
             
@@ -472,7 +471,7 @@ class MainActivity : AppCompatActivity() {
                 val progress = (fraction * 100).toInt()
                 binding.seekLiveShutter.progress = progress
                 val ms = clampedShutter / 1000000.0
-                binding.tvLiveShutterLabel.text = "Shutter: ${String.format(Locale.US, "%.1f", ms)} ms"
+                binding.tvLiveShutterLabel.text = getString(R.string.shutter, String.format(Locale.US, "%.1f", ms))
                 ndiCameraManager.setShutterSpeed(clampedShutter)
             }
         }
@@ -520,7 +519,7 @@ class MainActivity : AppCompatActivity() {
                 if (fromUser) {
                     isoRange?.let { range ->
                         val iso = progress + range.lower
-                        binding.tvLiveIsoLabel.text = "ISO: $iso"
+                        binding.tvLiveIsoLabel.text = getString(R.string.iso, iso)
                         ndiCameraManager.setIso(iso)
                     }
                 }
@@ -536,7 +535,7 @@ class MainActivity : AppCompatActivity() {
                         val fraction = progress / 100.0
                         val shutterSpeed = range.lower + (fraction * (range.upper - range.lower)).toLong()
                         val ms = shutterSpeed / 1000000.0
-                        binding.tvLiveShutterLabel.text = "Shutter: ${String.format(Locale.US, "%.1f", ms)} ms"
+                        binding.tvLiveShutterLabel.text = getString(R.string.shutter, String.format(Locale.US, "%.1f", ms))
                         ndiCameraManager.setShutterSpeed(shutterSpeed)
                     }
                 }
