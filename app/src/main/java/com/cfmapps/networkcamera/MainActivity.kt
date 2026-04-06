@@ -272,11 +272,11 @@ class MainActivity : AppCompatActivity() {
         
         isPortraitLock = binding.spinnerSetupOrientation.selectedItem.toString() == "Portrait"
         
-        // Lock OS Orientation to requested setup
+        // Lock OS Orientation to requested setup (Allows upside down rotations)
         requestedOrientation = if (isPortraitLock) {
-            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
         } else {
-            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         }
 
         ndiCameraManager.targetFps = fps
@@ -387,24 +387,24 @@ class MainActivity : AppCompatActivity() {
             (sensorOrientation - degrees + 360) % 360
         }
 
-        // 1. Reset TextureView Matrix to avoid conflicts
+        // 1. Clear any previous matrix
         binding.cameraTextureView.setTransform(android.graphics.Matrix())
 
-        // 2. Set TextureView exact size to match the raw buffer (NO STRETCHING)
+        // 2. Map TextureView 1:1 with camera buffer (Landscape by default)
         val lp = binding.cameraTextureView.layoutParams
         lp.width = videoWidth
         lp.height = videoHeight
         binding.cameraTextureView.layoutParams = lp
 
-        // 3. Rotate the View itself using Android hardware compositor
+        // 3. Let Android UI engine rotate the layout box
         binding.cameraTextureView.rotation = previewRotation.toFloat()
 
-        // 4. Calculate bounding box after rotation
+        // 4. Determine its conceptual width and height after rotation
         val isRotated = previewRotation == 90 || previewRotation == 270
         val boundingWidth = if (isRotated) videoHeight.toFloat() else videoWidth.toFloat()
         val boundingHeight = if (isRotated) videoWidth.toFloat() else videoHeight.toFloat()
 
-        // 5. Scale the View to perfectly fit (Letterbox/Contain) inside the screen
+        // 5. Shrink or expand the rotated box to fit inside the parent container (Contain)
         val scale = Math.min(viewWidth / boundingWidth, viewHeight / boundingHeight)
         binding.cameraTextureView.scaleX = scale
         binding.cameraTextureView.scaleY = scale
