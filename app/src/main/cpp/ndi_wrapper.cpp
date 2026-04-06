@@ -60,7 +60,8 @@ Java_com_cfmapps_networkcamera_NdiCameraManager_sendVideoFrame(
         jobject uBuffer, jint uRowStride,
         jobject vBuffer, jint vRowStride,
         jint uvPixelStride,
-        jint rotation) {
+        jint rotation,
+        jint fps) {
 
     if (!pNDI_send) return;
 
@@ -160,8 +161,16 @@ Java_com_cfmapps_networkcamera_NdiCameraManager_sendVideoFrame(
     NDI_video_frame.yres = outHeight;
     NDI_video_frame.FourCC = NDIlib_FourCC_video_type_I420;
     NDI_video_frame.p_data = frame_buffer.data();
-    NDI_video_frame.frame_rate_N = 30000;
-    NDI_video_frame.frame_rate_D = 1001;
+
+    // Use dynamic FPS if valid, fallback to 30000/1001
+    if (fps > 0) {
+        NDI_video_frame.frame_rate_N = fps * 1000;
+        NDI_video_frame.frame_rate_D = 1000;
+    } else {
+        NDI_video_frame.frame_rate_N = 30000;
+        NDI_video_frame.frame_rate_D = 1001;
+    }
+
     NDI_video_frame.line_stride_in_bytes = outWidth;
 
     NDIlib_send_send_video_v2(pNDI_send, &NDI_video_frame);
@@ -175,6 +184,5 @@ Java_com_cfmapps_networkcamera_NdiCameraManager_destroyNdi(
         NDIlib_send_destroy(pNDI_send);
         pNDI_send = nullptr;
     }
-    NDIlib_destroy();
     LOGD("NDI Destroyed.");
 }

@@ -31,6 +31,11 @@ class NdiCameraManager(private val context: Context) {
 
     // Current settings
     private var currentSize = Size(1280, 720) 
+    var targetFps = 30
+    
+    // Forced orientation logic. If true, forces Portrait, otherwise Landscape.
+    // If null, uses automatic sensor orientation based on window (legacy behavior).
+    var forcePortraitMode: Boolean? = null
     
     // Camera Control States
     var isManualMode = false
@@ -195,12 +200,14 @@ class NdiCameraManager(private val context: Context) {
             uBuffer, planes[1].rowStride,
             vBuffer, planes[2].rowStride,
             planes[1].pixelStride,
-            rotation
+            rotation,
+            targetFps
         )
     }
 
     private fun getFrameRotation(): Int {
         val display = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+        @Suppress("DEPRECATION")
         val displayRotation = display.defaultDisplay.rotation
         val degrees = when (displayRotation) {
             Surface.ROTATION_0 -> 0
@@ -209,13 +216,13 @@ class NdiCameraManager(private val context: Context) {
             Surface.ROTATION_270 -> 270
             else -> 0
         }
-        
+
         val cameraId = cameraDevice?.id ?: return 0
         val characteristics = systemCameraManager.getCameraCharacteristics(cameraId)
         val sensorOrientation = characteristics.get(android.hardware.camera2.CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
-        
         val isFront = characteristics.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) == android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT
         
+        // Calculate the exact rotation needed to make the frame upright relative to how the user holds the phone
         return if (isFront) {
             (sensorOrientation + degrees) % 360
         } else {
@@ -230,7 +237,8 @@ class NdiCameraManager(private val context: Context) {
         uBuffer: java.nio.ByteBuffer, uRowStride: Int,
         vBuffer: java.nio.ByteBuffer, vRowStride: Int,
         uvPixelStride: Int,
-        rotation: Int
+        rotation: Int,
+        fps: Int
     )
     external fun destroyNdi()
 

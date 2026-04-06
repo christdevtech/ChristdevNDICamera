@@ -1,10 +1,11 @@
 package com.cfmapps.networkcamera
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.graphics.SurfaceTexture
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -22,6 +23,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.cfmapps.networkcamera.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -31,6 +33,7 @@ class MainActivity : AppCompatActivity() {
 
     private var selectedCameraId: String? = null
     private var selectedSize: Size? = null
+    private var isPortraitLock: Boolean = false
     
     // Camera Control Ranges
     private var exposureRange: android.util.Range<Int>? = null
@@ -47,7 +50,7 @@ class MainActivity : AppCompatActivity() {
     ) { permissions ->
         val cameraGranted = permissions[Manifest.permission.CAMERA] == true
         if (cameraGranted) {
-            setupUI()
+            initSetupScreen()
         } else {
             handlePermissionDenied()
         }
@@ -67,13 +70,47 @@ class MainActivity : AppCompatActivity() {
         checkPermissions()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            if (!isStreaming) {
+                // Ensure setup screen is up to date if we resumed without streaming
+                initSetupScreen()
+            }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (!isStreaming) {
+            ndiCameraManager.close()
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!isStreaming && binding.setupContainer.visibility == View.VISIBLE) {
+            // Keep setup screen up to date on rotation
+        } else if (isStreaming && binding.cameraTextureView.isAvailable) {
+            // Refresh matrix
+            binding.cameraTextureView.post {
+                selectedSize?.let { size -> adjustAspectRatio(size.width, size.height) }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        ndiCameraManager.release()
+    }
+
     private fun checkPermissions() {
         val missingPermissions = requiredPermissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
         if (missingPermissions.isEmpty()) {
-            setupUI()
+            initSetupScreen()
         } else {
             permissionLauncher.launch(missingPermissions.toTypedArray())
         }
@@ -92,48 +129,56 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupUI() {
+    // ==========================================
+    // 1. SETUP SCREEN LOGIC
+    // ==========================================
+    private fun initSetupScreen() {
+        // Ensure UI is in Setup Mode
+        binding.setupContainer.visibility = View.VISIBLE
+        binding.liveContainer.visibility = View.GONE
+        
         val cameraIds = ndiCameraManager.getCameraIds()
         if (cameraIds.isEmpty()) {
             Toast.makeText(this, "No cameras found", Toast.LENGTH_LONG).show()
             return
         }
 
-        // 1. Initial Selection
+        // 1. Camera List
         if (selectedCameraId == null) {
             selectedCameraId = cameraIds.firstOrNull { id ->
                 val chars = (getSystemService(CAMERA_SERVICE) as android.hardware.camera2.CameraManager).getCameraCharacteristics(id)
                 chars.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) == android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK
             } ?: cameraIds[0]
         }
-
-        // 2. Setup Spinners
         setupCameraSpinner(cameraIds)
-        
-        // 3. Start Preview
-        if (binding.cameraTextureView.isAvailable) {
-            startInitialPreview()
-        } else {
-            binding.cameraTextureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-                    startInitialPreview()
-                }
-                override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
-                override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = true
-                override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
-            }
-        }
+
+        // 2. FPS List
+        val fpsOptions = listOf(30, 60, 24, 25, 50)
+        val fpsAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, fpsOptions.map { "$it fps" })
+        fpsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerSetupFps.adapter = fpsAdapter
+        binding.spinnerSetupFps.setSelection(0)
+
+        // 3. Orientation List
+        val orientationOptions = listOf("Landscape", "Portrait")
+        val oriAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, orientationOptions)
+        oriAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerSetupOrientation.adapter = oriAdapter
+        binding.spinnerSetupOrientation.setSelection(0)
+
+        // 4. Audio Devices
+        setupAudioDevices()
     }
 
     private fun setupCameraSpinner(cameraIds: List<String>) {
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, cameraIds)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinnerCamera.adapter = adapter
+        binding.spinnerSetupCamera.adapter = adapter
         
         val initialIndex = cameraIds.indexOf(selectedCameraId)
-        if (initialIndex >= 0) binding.spinnerCamera.setSelection(initialIndex)
+        if (initialIndex >= 0) binding.spinnerSetupCamera.setSelection(initialIndex)
 
-        binding.spinnerCamera.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        binding.spinnerSetupCamera.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 val newId = cameraIds[position]
                 if (newId != selectedCameraId) {
@@ -151,27 +196,23 @@ class MainActivity : AppCompatActivity() {
         val allResolutions = ndiCameraManager.getCameraResolutions(cameraId)
         if (allResolutions.isEmpty()) return
 
-        setupCameraControls(cameraId)
+        // Populate controls ranges in advance
+        setupLiveCameraControlsRanges(cameraId)
 
-        // Define standard broadcast formats to simplify the UI
         val standardFormats = mapOf(
             Size(3840, 2160) to "4K UHD",
             Size(1920, 1080) to "1080p FHD",
             Size(1280, 720) to "720p HD",
-            Size(854, 480) to "480p SD (16:9)",
+            Size(854, 480) to "480p SD",
             Size(720, 480) to "480p SD"
         )
 
-        // Filter and sort available resolutions
         var displayResolutions = allResolutions
             .filter { standardFormats.containsKey(it) }
             .sortedByDescending { it.width * it.height }
 
-        // Fallback: If no standard sizes are found, show the top 5 highest resolutions
         if (displayResolutions.isEmpty()) {
-            displayResolutions = allResolutions
-                .sortedByDescending { it.width * it.height }
-                .take(5)
+            displayResolutions = allResolutions.sortedByDescending { it.width * it.height }.take(5)
         }
 
         val resStrings = displayResolutions.map { size ->
@@ -181,17 +222,17 @@ class MainActivity : AppCompatActivity() {
 
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, resStrings)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinnerResolution.adapter = adapter
+        binding.spinnerSetupResolution.adapter = adapter
 
-        // Set default to 720p, 1080p, or the highest available
-        val defaultSize = displayResolutions.find { it.width == 1280 && it.height == 720 } 
-                        ?: displayResolutions.find { it.width == 1920 && it.height == 1080 }
+        // Set default to 1080p as requested, or fallback to best
+        val defaultSize = displayResolutions.find { it.width == 1920 && it.height == 1080 } 
+                        ?: displayResolutions.find { it.width == 1280 && it.height == 720 }
                         ?: displayResolutions[0]
         
         selectedSize = defaultSize
-        binding.spinnerResolution.setSelection(displayResolutions.indexOf(defaultSize))
+        binding.spinnerSetupResolution.setSelection(displayResolutions.indexOf(defaultSize))
 
-        binding.spinnerResolution.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        binding.spinnerSetupResolution.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 selectedSize = displayResolutions[position]
             }
@@ -199,79 +240,113 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupCameraControls(cameraId: String) {
-        // Auto Exposure Control
-        exposureRange = ndiCameraManager.getExposureRange(cameraId)
-        exposureRange?.let { range ->
-            val max = range.upper - range.lower
-            val progress = 0 - range.lower
+    private fun setupAudioDevices() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
             
-            binding.seekExposure.max = max
-            binding.seekExposure.progress = progress
-            binding.seekExposure.isEnabled = true
-            
-            binding.seekQuickExposure.max = max
-            binding.seekQuickExposure.progress = progress
-            binding.seekQuickExposure.isEnabled = true
-        } ?: run { 
-            binding.seekExposure.isEnabled = false 
-            binding.seekQuickExposure.isEnabled = false
-        }
-
-        // ISO Control
-        isoRange = ndiCameraManager.getIsoRange(cameraId)
-        isoRange?.let { range ->
-            val max = range.upper - range.lower
-            val progress = range.lower
-            
-            binding.seekIso.max = max
-            binding.seekIso.progress = progress
-            binding.tvIsoLabel.text = "ISO: ${range.lower}"
-            
-            binding.seekQuickIso.max = max
-            binding.seekQuickIso.progress = progress
-            binding.tvQuickIsoLabel.text = "ISO: ${range.lower}"
-        }
-
-        // Shutter Speed Control
-        shutterRange = ndiCameraManager.getShutterSpeedRange(cameraId)
-        shutterRange?.let { range ->
-            binding.seekShutter.max = 100
-            binding.seekShutter.progress = 0
-            val initialMs = range.lower / 1000000.0
-            val text = "Shutter: ${String.format(java.util.Locale.US, "%.1f", initialMs)} ms"
-            
-            binding.tvShutterLabel.text = text
-            
-            binding.seekQuickShutter.max = 100
-            binding.seekQuickShutter.progress = 0
-            binding.tvQuickShutterLabel.text = text
+            if (devices.isNotEmpty()) {
+                val deviceNames = devices.map { it.productName.toString() }
+                val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, deviceNames)
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                binding.spinnerSetupMicSource.adapter = adapter
+            } else {
+                val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf("No Microphone Detected"))
+                binding.spinnerSetupMicSource.adapter = adapter
+                binding.switchSetupMic.isChecked = false
+            }
+        } else {
+            binding.switchSetupMic.isChecked = false
+            binding.switchSetupMic.isEnabled = false
         }
     }
 
-    private fun startInitialPreview() {
-        if (selectedCameraId != null && selectedSize != null) {
-            restartPreview()
+    // ==========================================
+    // 2. LIVE SCREEN LOGIC
+    // ==========================================
+    
+    private fun startLiveBroadcast() {
+        val ndiName = binding.etSetupName.text.toString()
+        val fpsString = binding.spinnerSetupFps.selectedItem.toString()
+        val fps = fpsString.replace(" fps", "").toIntOrNull() ?: 30
+        
+        isPortraitLock = binding.spinnerSetupOrientation.selectedItem.toString() == "Portrait"
+        
+        // Lock OS Orientation to requested setup
+        requestedOrientation = if (isPortraitLock) {
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        } else {
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+
+        ndiCameraManager.targetFps = fps
+        ndiCameraManager.forcePortraitMode = isPortraitLock
+
+        // Force cleanup before starting NDI
+        ndiCameraManager.destroyNdi()
+        Thread.sleep(100)
+        
+        if (ndiCameraManager.initializeNdi(ndiName)) {
+            isStreaming = true
+            
+            // Swap UI
+            binding.setupContainer.visibility = View.GONE
+            binding.liveContainer.visibility = View.VISIBLE
+            binding.liveHudPanel.visibility = View.GONE // Start collapsed
+            
+            // Tally
+            binding.tallyBorder.visibility = View.VISIBLE
+            binding.tvLiveStatus.text = "LIVE • $ndiName"
+            
+            // Start Camera
+            startLocalPreview()
+        } else {
+            requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            Toast.makeText(this, "Failed to start NDI", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun restartPreview() {
+    private fun stopLiveBroadcast() {
+        isStreaming = false
+        ndiCameraManager.destroyNdi()
+        ndiCameraManager.close()
+        
+        // Unlock orientation
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        
+        // Swap UI back
+        binding.setupContainer.visibility = View.VISIBLE
+        binding.liveContainer.visibility = View.GONE
+        binding.tallyBorder.visibility = View.GONE
+        
+        // Reset HUD state
+        binding.switchLiveManualMode.isChecked = false
+        syncManualModeUI(false)
+    }
+
+    private fun startLocalPreview() {
+        if (binding.cameraTextureView.isAvailable) {
+            attachCameraToTexture()
+        } else {
+            binding.cameraTextureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+                    attachCameraToTexture()
+                }
+                override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+                override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = true
+                override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
+            }
+        }
+    }
+
+    private fun attachCameraToTexture() {
         val id = selectedCameraId ?: return
         val size = selectedSize ?: return
         
         lifecycleScope.launch {
             ndiCameraManager.close()
             try {
-                // Adjust TextureView aspect ratio
                 adjustAspectRatio(size.width, size.height)
-
-                // Ensure orientation is locked while streaming
-                if (isStreaming) {
-                    requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
-                } else {
-                    requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                }
-
                 ndiCameraManager.openCamera(id, size)
                 ndiCameraManager.startPreview(binding.cameraTextureView)
             } catch (e: Exception) {
@@ -281,61 +356,103 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun adjustAspectRatio(videoWidth: Int, videoHeight: Int) {
-        val viewWidth = binding.root.width
-        val viewHeight = binding.root.height
-        if (viewWidth == 0 || viewHeight == 0) return
-
-        val display = getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
-        val rotation = display.defaultDisplay.rotation
-        
-        val matrix = android.graphics.Matrix()
-        val viewRect = android.graphics.RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
-        val bufferRect = android.graphics.RectF(0f, 0f, videoHeight.toFloat(), videoWidth.toFloat())
-        val centerX = viewRect.centerX()
-        val centerY = viewRect.centerY()
-
-        bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY())
-        matrix.setRectToRect(viewRect, bufferRect, android.graphics.Matrix.ScaleToFit.CENTER)
-
-        if (android.view.Surface.ROTATION_90 == rotation || android.view.Surface.ROTATION_270 == rotation) {
-            val scale = Math.min(
-                viewHeight.toFloat() / videoHeight,
-                viewWidth.toFloat() / videoWidth
-            )
-            matrix.postScale(scale, scale, centerX, centerY)
-            matrix.postRotate((90 * (rotation - 2)).toFloat(), centerX, centerY)
-        } else {
-            val scale = Math.min(
-                viewHeight.toFloat() / videoWidth,
-                viewWidth.toFloat() / videoHeight
-            )
-            matrix.postScale(scale, scale, centerX, centerY)
-            matrix.postRotate(90f, centerX, centerY)
+        val viewWidth = binding.liveContainer.width
+        val viewHeight = binding.liveContainer.height
+        if (viewWidth == 0 || viewHeight == 0) {
+            binding.cameraTextureView.post { adjustAspectRatio(videoWidth, videoHeight) }
+            return
         }
-        binding.cameraTextureView.setTransform(matrix)
+
+        val display = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+        @Suppress("DEPRECATION")
+        val displayRotation = display.defaultDisplay.rotation
+        val degrees = when (displayRotation) {
+            android.view.Surface.ROTATION_0 -> 0
+            android.view.Surface.ROTATION_90 -> 90
+            android.view.Surface.ROTATION_180 -> 180
+            android.view.Surface.ROTATION_270 -> 270
+            else -> 0
+        }
+
+        val cameraManager = getSystemService(CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+        val cameraId = selectedCameraId ?: return
+        val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+        val sensorOrientation = characteristics.get(android.hardware.camera2.CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
+        val isFront = characteristics.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) == android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT
         
+        // Exactly match the NDI output rotation logic to guarantee preview matches stream
+        val previewRotation = if (isFront) {
+            (sensorOrientation + degrees) % 360
+        } else {
+            (sensorOrientation - degrees + 360) % 360
+        }
+
+        // 1. Reset TextureView Matrix to avoid conflicts
+        binding.cameraTextureView.setTransform(android.graphics.Matrix())
+
+        // 2. Set TextureView exact size to match the raw buffer (NO STRETCHING)
         val lp = binding.cameraTextureView.layoutParams
-        lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
-        lp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        lp.width = videoWidth
+        lp.height = videoHeight
         binding.cameraTextureView.layoutParams = lp
+
+        // 3. Rotate the View itself using Android hardware compositor
+        binding.cameraTextureView.rotation = previewRotation.toFloat()
+
+        // 4. Calculate bounding box after rotation
+        val isRotated = previewRotation == 90 || previewRotation == 270
+        val boundingWidth = if (isRotated) videoHeight.toFloat() else videoWidth.toFloat()
+        val boundingHeight = if (isRotated) videoWidth.toFloat() else videoHeight.toFloat()
+
+        // 5. Scale the View to perfectly fit (Letterbox/Contain) inside the screen
+        val scale = Math.min(viewWidth / boundingWidth, viewHeight / boundingHeight)
+        binding.cameraTextureView.scaleX = scale
+        binding.cameraTextureView.scaleY = scale
     }
 
-    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-        super.onConfigurationChanged(newConfig)
-        if (!isStreaming) {
-            startInitialPreview()
+    // ==========================================
+    // 3. CAMERA HUD CONTROLS
+    // ==========================================
+
+    private fun setupLiveCameraControlsRanges(cameraId: String) {
+        // Auto Exposure Control
+        exposureRange = ndiCameraManager.getExposureRange(cameraId)
+        exposureRange?.let { range ->
+            val max = range.upper - range.lower
+            val progress = 0 - range.lower
+            
+            binding.seekLiveExposure.max = max
+            binding.seekLiveExposure.progress = progress
+            binding.seekLiveExposure.isEnabled = true
+        } ?: run { 
+            binding.seekLiveExposure.isEnabled = false 
+        }
+
+        // ISO Control
+        isoRange = ndiCameraManager.getIsoRange(cameraId)
+        isoRange?.let { range ->
+            val max = range.upper - range.lower
+            val progress = range.lower
+            
+            binding.seekLiveIso.max = max
+            binding.seekLiveIso.progress = progress
+            binding.tvLiveIsoLabel.text = "ISO: ${range.lower}"
+        }
+
+        // Shutter Speed Control
+        shutterRange = ndiCameraManager.getShutterSpeedRange(cameraId)
+        shutterRange?.let { range ->
+            binding.seekLiveShutter.max = 100
+            binding.seekLiveShutter.progress = 0
+            val initialMs = range.lower / 1000000.0
+            val text = "Shutter: ${String.format(Locale.US, "%.1f", initialMs)} ms"
+            binding.tvLiveShutterLabel.text = text
         }
     }
 
     private fun syncManualModeUI(isChecked: Boolean) {
-        binding.layoutAutoControls.visibility = if (isChecked) View.GONE else View.VISIBLE
-        binding.layoutManualControls.visibility = if (isChecked) View.VISIBLE else View.GONE
-        
-        binding.seekQuickExposure.visibility = if (isChecked) View.GONE else View.VISIBLE
-        binding.layoutQuickManualControls.visibility = if (isChecked) View.VISIBLE else View.GONE
-        
-        binding.switchManualMode.isChecked = isChecked
-        binding.switchQuickManualMode.isChecked = isChecked
+        binding.layoutLiveAutoControls.visibility = if (isChecked) View.GONE else View.VISIBLE
+        binding.layoutLiveManualControls.visibility = if (isChecked) View.VISIBLE else View.GONE
         
         if (isChecked) {
             val currentIso = ndiCameraManager.lastAutoIso
@@ -344,11 +461,8 @@ class MainActivity : AppCompatActivity() {
             isoRange?.let { range ->
                 val clampedIso = currentIso.coerceIn(range.lower, range.upper)
                 val progress = clampedIso - range.lower
-                binding.seekIso.progress = progress
-                binding.seekQuickIso.progress = progress
-                val text = "ISO: $clampedIso"
-                binding.tvIsoLabel.text = text
-                binding.tvQuickIsoLabel.text = text
+                binding.seekLiveIso.progress = progress
+                binding.tvLiveIsoLabel.text = "ISO: $clampedIso"
                 ndiCameraManager.setIso(clampedIso)
             }
             
@@ -356,178 +470,79 @@ class MainActivity : AppCompatActivity() {
                 val clampedShutter = currentShutter.coerceIn(range.lower, range.upper)
                 val fraction = (clampedShutter - range.lower).toDouble() / (range.upper - range.lower).toDouble()
                 val progress = (fraction * 100).toInt()
-                binding.seekShutter.progress = progress
-                binding.seekQuickShutter.progress = progress
+                binding.seekLiveShutter.progress = progress
                 val ms = clampedShutter / 1000000.0
-                val text = "Shutter: ${String.format(java.util.Locale.US, "%.1f", ms)} ms"
-                binding.tvShutterLabel.text = text
-                binding.tvQuickShutterLabel.text = text
+                binding.tvLiveShutterLabel.text = "Shutter: ${String.format(Locale.US, "%.1f", ms)} ms"
                 ndiCameraManager.setShutterSpeed(clampedShutter)
             }
         }
         ndiCameraManager.setManualMode(isChecked)
     }
 
-    private fun handleExposureChange(progress: Int) {
-        exposureRange?.let { range ->
-            val ev = progress + range.lower
-            ndiCameraManager.setExposure(ev)
-            binding.seekExposure.progress = progress
-            binding.seekQuickExposure.progress = progress
-        }
-    }
-    
-    private fun handleIsoChange(progress: Int) {
-        isoRange?.let { range ->
-            val iso = progress + range.lower
-            val text = "ISO: $iso"
-            binding.tvIsoLabel.text = text
-            binding.tvQuickIsoLabel.text = text
-            binding.seekIso.progress = progress
-            binding.seekQuickIso.progress = progress
-            ndiCameraManager.setIso(iso)
-        }
-    }
-    
-    private fun handleShutterChange(progress: Int) {
-        shutterRange?.let { range ->
-            val fraction = progress / 100.0
-            val shutterSpeed = range.lower + (fraction * (range.upper - range.lower)).toLong()
-            val ms = shutterSpeed / 1000000.0
-            val text = "Shutter: ${String.format(java.util.Locale.US, "%.1f", ms)} ms"
-            binding.tvShutterLabel.text = text
-            binding.tvQuickShutterLabel.text = text
-            binding.seekShutter.progress = progress
-            binding.seekQuickShutter.progress = progress
-            ndiCameraManager.setShutterSpeed(shutterSpeed)
-        }
-    }
-
     private fun setupListeners() {
-        binding.btnSettings.setOnClickListener {
-            binding.settingsSheet.visibility = View.VISIBLE
-            binding.quickControlsOverlay.visibility = View.GONE
+        // Setup Screen
+        binding.btnStartStream.setOnClickListener {
+            startLiveBroadcast()
         }
 
-        binding.btnQuickSettings.setOnClickListener {
-            if (binding.quickControlsOverlay.visibility == View.VISIBLE) {
-                binding.quickControlsOverlay.visibility = View.GONE
+        // Live Screen
+        binding.btnStopStream.setOnClickListener {
+            stopLiveBroadcast()
+        }
+
+        binding.btnLiveHudToggle.setOnClickListener {
+            if (binding.liveHudPanel.visibility == View.VISIBLE) {
+                binding.liveHudPanel.visibility = View.GONE
             } else {
-                binding.quickControlsOverlay.visibility = View.VISIBLE
+                binding.liveHudPanel.visibility = View.VISIBLE
             }
         }
 
-        binding.switchManualMode.setOnCheckedChangeListener { _, isChecked ->
-            if (binding.switchQuickManualMode.isChecked != isChecked) {
-                syncManualModeUI(isChecked)
-            }
-        }
-        
-        binding.switchQuickManualMode.setOnCheckedChangeListener { _, isChecked ->
-            if (binding.switchManualMode.isChecked != isChecked) {
-                syncManualModeUI(isChecked)
-            }
+        binding.switchLiveManualMode.setOnCheckedChangeListener { _, isChecked ->
+            syncManualModeUI(isChecked)
         }
 
-        val exposureListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
+        binding.seekLiveExposure.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) handleExposureChange(progress)
+                if (fromUser) {
+                    exposureRange?.let { range ->
+                        val ev = progress + range.lower
+                        ndiCameraManager.setExposure(ev)
+                    }
+                }
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
-        }
-        binding.seekExposure.setOnSeekBarChangeListener(exposureListener)
-        binding.seekQuickExposure.setOnSeekBarChangeListener(exposureListener)
+        })
 
-        val isoListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
+        binding.seekLiveIso.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) handleIsoChange(progress)
+                if (fromUser) {
+                    isoRange?.let { range ->
+                        val iso = progress + range.lower
+                        binding.tvLiveIsoLabel.text = "ISO: $iso"
+                        ndiCameraManager.setIso(iso)
+                    }
+                }
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
-        }
-        binding.seekIso.setOnSeekBarChangeListener(isoListener)
-        binding.seekQuickIso.setOnSeekBarChangeListener(isoListener)
+        })
 
-        val shutterListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
+        binding.seekLiveShutter.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) handleShutterChange(progress)
+                if (fromUser) {
+                    shutterRange?.let { range ->
+                        val fraction = progress / 100.0
+                        val shutterSpeed = range.lower + (fraction * (range.upper - range.lower)).toLong()
+                        val ms = shutterSpeed / 1000000.0
+                        binding.tvLiveShutterLabel.text = "Shutter: ${String.format(Locale.US, "%.1f", ms)} ms"
+                        ndiCameraManager.setShutterSpeed(shutterSpeed)
+                    }
+                }
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
-        }
-        binding.seekShutter.setOnSeekBarChangeListener(shutterListener)
-        binding.seekQuickShutter.setOnSeekBarChangeListener(shutterListener)
-
-        binding.btnApplySettings.setOnClickListener {
-            binding.settingsSheet.visibility = View.GONE
-            restartPreview()
-        }
-
-        binding.btnStreamToggle.setOnClickListener {
-            if (isStreaming) {
-                stopStream()
-            } else {
-                startStream()
-            }
-        }
-    }
-
-    private fun startStream() {
-        val ndiName = binding.etNdiName.text.toString()
-        
-        // Lock orientation BEFORE starting stream
-        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
-        
-        // Force cleanup before starting to prevent port clashes
-        ndiCameraManager.destroyNdi()
-        Thread.sleep(100)
-        
-        if (ndiCameraManager.initializeNdi(ndiName)) {
-            isStreaming = true
-            binding.tvStatus.text = "LIVE • $ndiName"
-            binding.tvStatus.setTextColor(Color.RED)
-            binding.btnStreamToggle.text = "STOP"
-            binding.btnSettings.visibility = View.GONE
-            binding.tallyBorder.visibility = View.VISIBLE
-            binding.tallyBorder.setBackgroundColor(Color.argb(100, 255, 0, 0))
-        } else {
-            requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            Toast.makeText(this, "Failed to start NDI", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun stopStream() {
-        isStreaming = false
-        ndiCameraManager.destroyNdi()
-        
-        // Unlock orientation
-        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-
-        binding.tvStatus.text = "READY"
-        binding.tvStatus.setTextColor(Color.WHITE)
-        binding.btnStreamToggle.text = "GO LIVE"
-        binding.btnSettings.visibility = View.VISIBLE
-        binding.tallyBorder.visibility = View.GONE
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            setupUI()
-        }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        // If we're not streaming, we can close the camera to save power
-        if (!isStreaming) {
-            ndiCameraManager.close()
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        ndiCameraManager.release()
+        })
     }
 }
