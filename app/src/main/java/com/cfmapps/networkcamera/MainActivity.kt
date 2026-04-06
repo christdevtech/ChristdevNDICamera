@@ -363,51 +363,61 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val display = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
-        @Suppress("DEPRECATION")
-        val displayRotation = display.defaultDisplay.rotation
-        val degrees = when (displayRotation) {
-            android.view.Surface.ROTATION_0 -> 0
-            android.view.Surface.ROTATION_90 -> 90
-            android.view.Surface.ROTATION_180 -> 180
-            android.view.Surface.ROTATION_270 -> 270
-            else -> 0
-        }
+        // 1. Reset View-level properties to avoid conflicting with Matrix math
+        binding.cameraTextureView.rotation = 0f
+        binding.cameraTextureView.scaleX = 1f
+        binding.cameraTextureView.scaleY = 1f
 
-        val cameraManager = getSystemService(CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+        // Ensure TextureView fills parent so Matrix can draw anywhere inside it freely
+        val lp = binding.cameraTextureView.layoutParams
+        lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        lp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        binding.cameraTextureView.layoutParams = lp
+
+        val cameraManager = getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
         val cameraId = selectedCameraId ?: return
         val characteristics = cameraManager.getCameraCharacteristics(cameraId)
         val sensorOrientation = characteristics.get(android.hardware.camera2.CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
         val isFront = characteristics.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) == android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT
         
-        // Exactly match the NDI output rotation logic to guarantee preview matches stream
+        // Calculate the necessary rotation to show the image upright.
+        // We subtract the target display rotation to counter-rotate the UI locking.
+        // If locked to Portrait (isPortraitLock == true), device is at 0 rotation physically.
+        // If locked to Landscape, device is at 90 degrees physically.
+        val targetRotationDegrees = if (isPortraitLock) 0 else 90
+
         val previewRotation = if (isFront) {
-            (sensorOrientation + degrees) % 360
+            (sensorOrientation + targetRotationDegrees) % 360
         } else {
-            (sensorOrientation - degrees + 360) % 360
+            (sensorOrientation - targetRotationDegrees + 360) % 360
         }
 
-        // 1. Clear any previous matrix
-        binding.cameraTextureView.setTransform(android.graphics.Matrix())
-
-        // 2. Map TextureView 1:1 with camera buffer (Landscape by default)
-        val lp = binding.cameraTextureView.layoutParams
-        lp.width = videoWidth
-        lp.height = videoHeight
-        binding.cameraTextureView.layoutParams = lp
-
-        // 3. Let Android UI engine rotate the layout box
-        binding.cameraTextureView.rotation = previewRotation.toFloat()
-
-        // 4. Determine its conceptual width and height after rotation
+        // 3. Perfect TextureView Matrix Math (Object-Fit: Contain)
+        val matrix = android.graphics.Matrix()
+        
+        // TextureView implicitly scales the raw buffer (videoWidth x videoHeight) to fill its bounds (viewWidth x viewHeight).
+        // Step A: Undo this implicit scaling so our math operates on a pure 1:1 pixel layout.
+        matrix.postScale(videoWidth.toFloat() / viewWidth.toFloat(), videoHeight.toFloat() / viewHeight.toFloat())
+        
+        // Step B: Translate the buffer so its exact center is at (0,0) for clean rotation.
+        matrix.postTranslate(-videoWidth / 2f, -videoHeight / 2f)
+        
+        // Step C: Apply the proper upright rotation.
+        matrix.postRotate(previewRotation.toFloat())
+        
+        // Step D: Calculate the new physical dimensions of the buffer now that it's rotated.
         val isRotated = previewRotation == 90 || previewRotation == 270
-        val boundingWidth = if (isRotated) videoHeight.toFloat() else videoWidth.toFloat()
-        val boundingHeight = if (isRotated) videoWidth.toFloat() else videoHeight.toFloat()
+        val rotatedWidth = if (isRotated) videoHeight.toFloat() else videoWidth.toFloat()
+        val rotatedHeight = if (isRotated) videoWidth.toFloat() else videoHeight.toFloat()
+        
+        // Step E: Scale this rotated buffer so it cleanly fits inside the device screen (Letterbox).
+        val scale = Math.min(viewWidth.toFloat() / rotatedWidth, viewHeight.toFloat() / rotatedHeight)
+        matrix.postScale(scale, scale)
+        
+        // Step F: Move the properly scaled and rotated buffer back to the center of the screen.
+        matrix.postTranslate(viewWidth / 2f, viewHeight / 2f)
 
-        // 5. Shrink or expand the rotated box to fit inside the parent container (Contain)
-        val scale = Math.min(viewWidth / boundingWidth, viewHeight / boundingHeight)
-        binding.cameraTextureView.scaleX = scale
-        binding.cameraTextureView.scaleY = scale
+        binding.cameraTextureView.setTransform(matrix)
     }
 
     // ==========================================
