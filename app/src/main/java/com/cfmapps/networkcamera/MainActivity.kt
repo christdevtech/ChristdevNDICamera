@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.util.Size
+import android.view.Surface
 import android.view.TextureView
 import android.view.View
 import android.widget.AdapterView
@@ -355,6 +356,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Configures the TextureView transform to display the camera preview with correct
+     * orientation and aspect ratio.
+     *
+     * KEY INSIGHT: Camera2's SurfaceTexture already applies the sensor orientation rotation
+     * via its internal GL transform matrix. This means:
+     *   - In portrait (ROTATION_0): content is already upright, no extra rotation needed
+     *   - In landscape (ROTATION_90/270): we must compensate because the GL transform
+     *     still rotated for the device's natural (portrait) orientation
+     *
+     * This follows the standard Google Camera2Basic configureTransform pattern.
+     */
     private fun adjustAspectRatio(videoWidth: Int, videoHeight: Int) {
         val viewWidth = binding.liveContainer.width.toFloat()
         val viewHeight = binding.liveContainer.height.toFloat()
@@ -363,35 +376,63 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        @Suppress("DEPRECATION")
+        val rotation = (getSystemService(WINDOW_SERVICE) as android.view.WindowManager)
+            .defaultDisplay.rotation
+
         val matrix = android.graphics.Matrix()
-        
-        // 1. Undo TextureView's default implicit stretching.
-        // TextureView automatically stretches the raw camera buffer (e.g. 1920x1080) to fit the screen.
-        // Multiplying by (video/view) perfectly neutralizes this stretch, restoring the 1:1 pixel aspect ratio.
-        matrix.setScale(videoWidth / viewWidth, videoHeight / viewHeight)
-        
-        // 2. Move this un-stretched, 1:1 buffer to the exact center of the screen.
-        matrix.postTranslate((viewWidth - videoWidth) / 2f, (viewHeight - videoHeight) / 2f)
-        
-        // 3. Apply Camera Sensor Rotation
-        // The camera sensor outputs a Landscape image by default. 
-        // If the user locked the app to Portrait, we must rotate the image 90 degrees to make it vertical.
-        // If the user locked to Landscape, 0 degrees.
-        val rotationDegrees = if (isPortraitLock) 90f else 0f
-        matrix.postRotate(rotationDegrees, viewWidth / 2f, viewHeight / 2f)
-        
-        // 4. Scale to Fit (Letterbox / Contain)
-        // Calculate the bounding box of the video *after* it has been rotated.
-        val rotatedWidth = if (isPortraitLock) videoHeight.toFloat() else videoWidth.toFloat()
-        val rotatedHeight = if (isPortraitLock) videoWidth.toFloat() else videoHeight.toFloat()
-        
-        // Scale the image up/down so it perfectly fits within the view container without cropping.
-        val scale = Math.min(viewWidth / rotatedWidth, viewHeight / rotatedHeight)
-        matrix.postScale(scale, scale, viewWidth / 2f, viewHeight / 2f)
-        
+        val viewRect = android.graphics.RectF(0f, 0f, viewWidth, viewHeight)
+        // After the SurfaceTexture's internal GL rotation, the effective content dimensions
+        // are swapped (height x width) relative to the raw buffer. So bufferRect uses
+        // (videoHeight x videoWidth) to represent the post-rotation effective size.
+        val bufferRect = android.graphics.RectF(0f, 0f, videoHeight.toFloat(), videoWidth.toFloat())
+        val centerX = viewRect.centerX()
+        val centerY = viewRect.centerY()
+
+        when (rotation) {
+            Surface.ROTATION_90, Surface.ROTATION_270 -> {
+                // In landscape: the SurfaceTexture GL transform rotated for portrait,
+                // but the display is landscape. We need to re-map and rotate to compensate.
+                bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY())
+                matrix.setRectToRect(viewRect, bufferRect, android.graphics.Matrix.ScaleToFit.FILL)
+                // Scale to fit within the view (letterbox / contain)
+                val scale = Math.min(
+                    viewWidth / videoWidth.toFloat(),
+                    viewHeight / videoHeight.toFloat()
+                )
+                matrix.postScale(scale, scale, centerX, centerY)
+                // Rotate to match the actual display orientation
+                val rotationDegrees = 90f * (rotation - 2)
+                matrix.postRotate(rotationDegrees, centerX, centerY)
+            }
+            Surface.ROTATION_180 -> {
+                // Upside-down portrait: content is upright but flipped 180°
+                matrix.postRotate(180f, centerX, centerY)
+            }
+            // Surface.ROTATION_0 -> identity matrix (SurfaceTexture already handled rotation)
+        }
+
+        // For portrait (ROTATION_0), we may still need aspect ratio correction
+        // if the view aspect ratio doesn't perfectly match the video.
+        if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            // The effective content after SurfaceTexture rotation is portrait: (videoHeight x videoWidth)
+            val contentWidth = videoHeight.toFloat()
+            val contentHeight = videoWidth.toFloat()
+            val viewAspect = viewWidth / viewHeight
+            val contentAspect = contentWidth / contentHeight
+
+            if (Math.abs(viewAspect - contentAspect) > 0.01f) {
+                // Need to letterbox: scale content to fit within view
+                val scale = Math.min(viewWidth / contentWidth, viewHeight / contentHeight)
+                val scaleX = (contentWidth * scale) / viewWidth
+                val scaleY = (contentHeight * scale) / viewHeight
+                matrix.postScale(scaleX, scaleY, centerX, centerY)
+            }
+        }
+
         binding.cameraTextureView.setTransform(matrix)
-        
-        // Ensure the TextureView itself takes up the whole container so the Matrix can draw freely inside it
+
+        // Ensure the TextureView fills the container so the Matrix can position freely
         val lp = binding.cameraTextureView.layoutParams
         lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
         lp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT
